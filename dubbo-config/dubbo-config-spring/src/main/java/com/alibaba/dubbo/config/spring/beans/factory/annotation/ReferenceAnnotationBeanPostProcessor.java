@@ -29,11 +29,7 @@ import org.springframework.context.ApplicationEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextRefreshedEvent;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
+import java.lang.reflect.*;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
@@ -103,16 +99,27 @@ public class ReferenceAnnotationBeanPostProcessor extends AnnotationInjectedBean
         return Collections.unmodifiableMap(injectedMethodReferenceBeanCache);
     }
 
+    /**
+     * 该方法是一个模板方法，用来得到一个指定注入类型的对象
+     *
+     * @param reference
+     * @param bean            Current bean that will be injected
+     * @param beanName        Current bean name that will be injected
+     * @param injectedType    the type of injected-object
+     * @param injectedElement {@link InjectionMetadata.InjectedElement}
+     * @return
+     * @throws Exception
+     */
     @Override
     protected Object doGetInjectedBean(Reference reference, Object bean, String beanName, Class<?> injectedType,
                                        InjectionMetadata.InjectedElement injectedElement) throws Exception {
-
+        // 构建注入对象的ReferenceBean名称
         String referencedBeanName = buildReferencedBeanName(reference, injectedType);
-
+        // 构建注入对象对应的ReferenceBean对象
         ReferenceBean referenceBean = buildReferenceBeanIfAbsent(referencedBeanName, reference, injectedType, getClassLoader());
-
+        // 放入缓存
         cacheInjectedReferenceBean(referenceBean, injectedElement);
-
+        // 创建代理对象
         Object proxy = buildProxy(referencedBeanName, referenceBean, injectedType);
 
         return proxy;

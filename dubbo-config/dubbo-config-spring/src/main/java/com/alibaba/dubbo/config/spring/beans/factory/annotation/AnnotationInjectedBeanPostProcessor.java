@@ -21,11 +21,7 @@ import org.apache.commons.logging.LogFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.PropertyValues;
-import org.springframework.beans.factory.BeanClassLoaderAware;
-import org.springframework.beans.factory.BeanCreationException;
-import org.springframework.beans.factory.BeanFactory;
-import org.springframework.beans.factory.BeanFactoryAware;
-import org.springframework.beans.factory.DisposableBean;
+import org.springframework.beans.factory.*;
 import org.springframework.beans.factory.annotation.InjectionMetadata;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -46,13 +42,7 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -123,8 +113,10 @@ public abstract class AnnotationInjectedBeanPostProcessor<A extends Annotation> 
     public PropertyValues postProcessPropertyValues(
             PropertyValues pvs, PropertyDescriptor[] pds, Object bean, String beanName) throws BeanCreationException {
 
+        // 查找当前Bean对象需要注入的成员元信息，包括成员变量和方法，即被@Reference标注的成员，把这些属性集合封转成一个InjectionMetadata对象
         InjectionMetadata metadata = findInjectionMetadata(beanName, bean.getClass(), pvs);
         try {
+            // 注入属性值
             metadata.inject(bean, beanName, pvs);
         } catch (BeanCreationException ex) {
             throw ex;
@@ -218,25 +210,41 @@ public abstract class AnnotationInjectedBeanPostProcessor<A extends Annotation> 
 
 
     private AnnotationInjectedBeanPostProcessor.AnnotatedInjectionMetadata buildAnnotatedMetadata(final Class<?> beanClass) {
+        // 查找需要注入的成员变量的元信息
         Collection<AnnotationInjectedBeanPostProcessor.AnnotatedFieldElement> fieldElements = findFieldAnnotationMetadata(beanClass);
+        // 查找需要注入的方法的元信息
         Collection<AnnotationInjectedBeanPostProcessor.AnnotatedMethodElement> methodElements = findAnnotatedMethodMetadata(beanClass);
+        // 返回成员变量和成员方法的元信息
         return new AnnotationInjectedBeanPostProcessor.AnnotatedInjectionMetadata(beanClass, fieldElements, methodElements);
 
     }
 
+    /**
+     * 找到需要注入的成员元信息，封装成InjectionMetadata
+     *
+     * @param beanName 当前需要被注入的对象名
+     * @param clazz    当前需要被注入的类对象
+     * @param pvs      当前需要被注入对象的参数
+     * @return 返回需要注入的成员元信息
+     */
     public InjectionMetadata findInjectionMetadata(String beanName, Class<?> clazz, PropertyValues pvs) {
         // Fall back to class name as cache key, for backwards compatibility with custom callers.
+        // 获取缓存key，默认是beanName，否则是claaName
         String cacheKey = (StringUtils.hasLength(beanName) ? beanName : clazz.getName());
         // Quick check on the concurrent map first, with minimal locking.
+        // 先从缓存获取，获取不到，或者注入属性的元数据所在的目标类与当前被注入的类不一致，需要重新获取
         AnnotationInjectedBeanPostProcessor.AnnotatedInjectionMetadata metadata = this.injectionMetadataCache.get(cacheKey);
         if (InjectionMetadata.needsRefresh(metadata, clazz)) {
             synchronized (this.injectionMetadataCache) {
+                // 双层判断
                 metadata = this.injectionMetadataCache.get(cacheKey);
                 if (InjectionMetadata.needsRefresh(metadata, clazz)) {
+                    // 与原来的目标类不一致，先清楚参数属性，但是排除需要的参数
                     if (metadata != null) {
                         metadata.clear(pvs);
                     }
                     try {
+                        // 找到需要注入的属性信息，并放入缓存
                         metadata = buildAnnotatedMetadata(clazz);
                         this.injectionMetadataCache.put(cacheKey, metadata);
                     } catch (NoClassDefFoundError err) {
