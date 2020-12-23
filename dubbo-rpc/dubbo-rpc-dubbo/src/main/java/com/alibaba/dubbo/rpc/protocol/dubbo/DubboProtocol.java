@@ -334,6 +334,7 @@ public class DubboProtocol extends AbstractProtocol {
     public <T> Invoker<T> refer(Class<T> serviceType, URL url) throws RpcException {
         optimizeSerialization(url);
         // create rpc invoker.
+        // 根据url获取远程客户端，返回一个DubboInvoker
         DubboInvoker<T> invoker = new DubboInvoker<T>(serviceType, url, getClients(url), invokers);
         invokers.add(invoker);
         return invoker;
@@ -352,8 +353,10 @@ public class DubboProtocol extends AbstractProtocol {
         ExchangeClient[] clients = new ExchangeClient[connections];
         for (int i = 0; i < clients.length; i++) {
             if (service_share_connect) {
+                // 获取共享的客户端。过程是通过远程地址找到client，如果远程地址还没有客户端就执行initClients()
                 clients[i] = getSharedClient(url);
             } else {
+                // 得到初始化的客户端
                 clients[i] = initClient(url);
             }
         }
@@ -396,6 +399,7 @@ public class DubboProtocol extends AbstractProtocol {
     private ExchangeClient initClient(URL url) {
 
         // client type setting.
+        // 获取客户端类型，默认是netty
         String str = url.getParameter(Constants.CLIENT_KEY, url.getParameter(Constants.SERVER_KEY, Constants.DEFAULT_REMOTING_CLIENT));
 
         url = url.addParameter(Constants.CODEC_KEY, DubboCodec.NAME);
@@ -412,8 +416,10 @@ public class DubboProtocol extends AbstractProtocol {
         try {
             // connection should be lazy
             if (url.getParameter(Constants.LAZY_CONNECT_KEY, false)) {
+                // 懒连接
                 client = new LazyConnectExchangeClient(url, requestHandler);
             } else {
+                // 连接远程
                 client = Exchangers.connect(url, requestHandler);
             }
         } catch (RemotingException e) {

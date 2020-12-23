@@ -272,7 +272,11 @@ public class RegistryProtocol implements Protocol {
     @Override
     @SuppressWarnings("unchecked")
     public <T> Invoker<T> refer(Class<T> type, URL url) throws RpcException {
+        // 获取registry的参数值，设置为URL协议头
+        // 未替换前：registry://ip:port/path?registry=zookeeper
+        // 替换后：zookeeper://ip:port/path?key=value
         url = url.setProtocol(url.getParameter(Constants.REGISTRY_KEY, Constants.DEFAULT_REGISTRY)).removeParameter(Constants.REGISTRY_KEY);
+        // 获取注册中心实例，包括zkClient、registryUrl
         Registry registry = registryFactory.getRegistry(url);
         if (RegistryService.class.equals(type)) {
             return proxyFactory.getInvoker((T) registry, type, url);
@@ -287,6 +291,7 @@ public class RegistryProtocol implements Protocol {
                 return doRefer(getMergeableCluster(), registry, type, url);
             }
         }
+        // 真正的refer
         return doRefer(cluster, registry, type, url);
     }
 
@@ -295,24 +300,39 @@ public class RegistryProtocol implements Protocol {
     }
 
     private <T> Invoker<T> doRefer(Cluster cluster, Registry registry, Class<T> type, URL url) {
+        // 创建Directory，类似我们之前提到的服务目录
         RegistryDirectory<T> directory = new RegistryDirectory<T>(type, url);
+        // 设置注册中心实例
         directory.setRegistry(registry);
+        // 设置动态生成的Protocol$Adaptive
         directory.setProtocol(protocol);
+
         // all attributes of REFER_KEY
+        // 获取url上的参数，封装成map。然后根据这个map再构建一个消费者URL
         Map<String, String> parameters = new HashMap<String, String>(directory.getUrl().getParameters());
+        // url：consumer://10.0.0.113/cn.com.bluemoon.service.portal.service.PortalAppService?application=bm-officeAuto-asset&check=false&dubbo=2.8.4.BM-SNAPSHOT
+        // &interface=cn.com.bluemoon.service.portal.service.PortalAppService&methods=insertUserRoleTable,queryAPIList
+        // &pid=7252&revision=0.0.8&sendmsg=false&side=consumer&timeout=60000&timestamp=1608728137056
         URL subscribeUrl = new URL(Constants.CONSUMER_PROTOCOL, parameters.remove(Constants.REGISTER_IP_KEY), 0, type.getName(), parameters);
+
         if (!Constants.ANY_VALUE.equals(url.getServiceInterface())
                 && url.getParameter(Constants.REGISTER_KEY, true)) {
             URL registeredConsumerUrl = getRegisteredConsumerUrl(subscribeUrl, url);
+            // 向注册中心注册消费者，实际上就是在consumers目录下创建新节点
             registry.register(registeredConsumerUrl);
             directory.setRegisteredConsumerUrl(registeredConsumerUrl);
         }
+
+        // 监听providers目录、configurators目录和routers目录
+        // 订阅完，会触发DubboProtocol#refer方法
         directory.subscribe(subscribeUrl.addParameter(Constants.CATEGORY_KEY,
                 Constants.PROVIDERS_CATEGORY
                         + "," + Constants.CONFIGURATORS_CATEGORY
                         + "," + Constants.ROUTERS_CATEGORY));
 
+        // 封装多个Invoker，对外暴露一个，方便使用
         Invoker invoker = cluster.join(directory);
+        // 在提供者消费者服务表中记录这个信息
         ProviderConsumerRegTable.registerConsumer(invoker, url, subscribeUrl, directory);
         return invoker;
     }
