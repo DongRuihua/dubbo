@@ -115,6 +115,8 @@ public class DefaultFuture implements ResponseFuture {
 
     public static void received(Channel channel, Response response) {
         try {
+            // 响应返回的id，就是服务端请求时发送的id
+            // 根据请求id到缓存找到对应的Future
             DefaultFuture future = FUTURES.remove(response.getId());
             if (future != null) {
                 future.doReceived(response);
@@ -276,8 +278,10 @@ public class DefaultFuture implements ResponseFuture {
     private void doReceived(Response res) {
         lock.lock();
         try {
+            // 接收响应结果
             response = res;
             if (done != null) {
+                // 唤醒请求线程
                 done.signal();
             }
         } finally {

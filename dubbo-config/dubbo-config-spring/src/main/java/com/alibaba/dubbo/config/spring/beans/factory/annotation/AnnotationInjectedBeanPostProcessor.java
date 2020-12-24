@@ -489,7 +489,7 @@ public abstract class AnnotationInjectedBeanPostProcessor<A extends Annotation> 
 
         @Override
         protected void inject(Object bean, String beanName, PropertyValues pvs) throws Throwable {
-
+            // 获取参数的类对象
             Class<?> injectedType = pd.getPropertyType();
 
             injectedBean = getInjectedObject(annotation, bean, beanName, injectedType, this);

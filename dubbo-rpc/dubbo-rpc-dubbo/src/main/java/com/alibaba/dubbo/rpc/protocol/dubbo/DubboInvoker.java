@@ -68,9 +68,11 @@ public class DubboInvoker<T> extends AbstractInvoker<T> {
     protected Result doInvoke(final Invocation invocation) throws Throwable {
         RpcInvocation inv = (RpcInvocation) invocation;
         final String methodName = RpcUtils.getMethodName(invocation);
+        // 设置path和version到attachment
         inv.setAttachment(Constants.PATH_KEY, getUrl().getPath());
         inv.setAttachment(Constants.VERSION_KEY, version);
 
+        // 选择一个客户端
         ExchangeClient currentClient;
         if (clients.length == 1) {
             currentClient = clients[0];
@@ -78,20 +80,28 @@ public class DubboInvoker<T> extends AbstractInvoker<T> {
             currentClient = clients[index.getAndIncrement() % clients.length];
         }
         try {
+            // 异步调用标记
             boolean isAsync = RpcUtils.isAsync(getUrl(), invocation);
+            // oneway发送方式标记
             boolean isOneway = RpcUtils.isOneway(getUrl(), invocation);
+            // 超时时间
             int timeout = getUrl().getMethodParameter(methodName, Constants.TIMEOUT_KEY, Constants.DEFAULT_TIMEOUT);
+
             if (isOneway) {
+                // oneway方式发送，不管发送结果
                 boolean isSent = getUrl().getMethodParameter(methodName, Constants.SENT_KEY, false);
                 currentClient.send(inv, isSent);
                 RpcContext.getContext().setFuture(null);
                 return new RpcResult();
             } else if (isAsync) {
+                // 异步发送
                 ResponseFuture future = currentClient.request(inv, timeout);
                 RpcContext.getContext().setFuture(new FutureAdapter<Object>(future));
                 return new RpcResult();
             } else {
                 RpcContext.getContext().setFuture(null);
+                // 同步发送，直接调用future.get 阻塞等待结果
+                // 异步和同步的区别是，future.get是用户调用还是组件调用
                 return (Result) currentClient.request(inv, timeout).get();
             }
         } catch (TimeoutException e) {
