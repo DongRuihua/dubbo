@@ -114,7 +114,7 @@ final class HeaderExchangeChannel implements ExchangeChannel {
         // 这里会创建一个请求id，然后缓存future，等响应结果返回后需要用到
         DefaultFuture future = new DefaultFuture(channel, req, timeout);
         try {
-            // 调用NettyClient#send
+            // 调用NettyClient#send，发送请求
             channel.send(req);
         } catch (RemotingException e) {
             future.cancel();
