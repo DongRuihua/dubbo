@@ -26,36 +26,18 @@ import com.alibaba.dubbo.common.utils.NetUtils;
 import com.alibaba.dubbo.common.utils.StringUtils;
 import com.alibaba.dubbo.registry.NotifyListener;
 import com.alibaba.dubbo.registry.Registry;
-import com.alibaba.dubbo.rpc.Invocation;
-import com.alibaba.dubbo.rpc.Invoker;
-import com.alibaba.dubbo.rpc.Protocol;
-import com.alibaba.dubbo.rpc.RpcException;
-import com.alibaba.dubbo.rpc.RpcInvocation;
-import com.alibaba.dubbo.rpc.cluster.Cluster;
-import com.alibaba.dubbo.rpc.cluster.Configurator;
-import com.alibaba.dubbo.rpc.cluster.ConfiguratorFactory;
-import com.alibaba.dubbo.rpc.cluster.Router;
-import com.alibaba.dubbo.rpc.cluster.RouterFactory;
+import com.alibaba.dubbo.rpc.*;
+import com.alibaba.dubbo.rpc.cluster.*;
 import com.alibaba.dubbo.rpc.cluster.directory.AbstractDirectory;
 import com.alibaba.dubbo.rpc.cluster.directory.StaticDirectory;
 import com.alibaba.dubbo.rpc.cluster.support.ClusterUtils;
 import com.alibaba.dubbo.rpc.protocol.InvokerWrapper;
 import com.alibaba.dubbo.rpc.support.RpcUtils;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * RegistryDirectory
- *
  */
 public class RegistryDirectory<T> extends AbstractDirectory<T> implements NotifyListener {
 
@@ -194,10 +176,12 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
 
     @Override
     public synchronized void notify(List<URL> urls) {
+        // 用来保存configurators、routers、providers节点的url信息
         List<URL> invokerUrls = new ArrayList<URL>();
         List<URL> routerUrls = new ArrayList<URL>();
         List<URL> configuratorUrls = new ArrayList<URL>();
         for (URL url : urls) {
+            // 根据协议和类别，把url添加到对应的集合
             String protocol = url.getProtocol();
             String category = url.getParameter(Constants.CATEGORY_KEY, Constants.DEFAULT_CATEGORY);
             if (Constants.ROUTERS_CATEGORY.equals(category)
@@ -214,10 +198,12 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
         }
         // configurators
         if (configuratorUrls != null && !configuratorUrls.isEmpty()) {
+            // 把URL转成Configurator对象
             this.configurators = toConfigurators(configuratorUrls);
         }
         // routers
         if (routerUrls != null && !routerUrls.isEmpty()) {
+            // 把URL转成Router对象
             List<Router> routers = toRouters(routerUrls);
             if (routers != null) { // null - do nothing
                 setRouters(routers);
@@ -232,6 +218,7 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
             }
         }
         // providers
+        // 刷新provider
         refreshInvoker(invokerUrls);
     }
 
@@ -257,13 +244,16 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
                 invokerUrls.addAll(this.cachedInvokerUrls);
             } else {
                 this.cachedInvokerUrls = new HashSet<URL>();
-                this.cachedInvokerUrls.addAll(invokerUrls);//Cached invoker urls, convenient for comparison
+                //Cached invoker urls, convenient for comparison
+                this.cachedInvokerUrls.addAll(invokerUrls);
             }
             if (invokerUrls.isEmpty()) {
                 return;
             }
-            Map<String, Invoker<T>> newUrlInvokerMap = toInvokers(invokerUrls);// Translate url list to Invoker map
-            Map<String, List<Invoker<T>>> newMethodInvokerMap = toMethodInvokers(newUrlInvokerMap); // Change method name to map Invoker Map
+            // Translate url list to Invoker map
+            Map<String, Invoker<T>> newUrlInvokerMap = toInvokers(invokerUrls);
+            // Change method name to map Invoker Map
+            Map<String, List<Invoker<T>>> newMethodInvokerMap = toMethodInvokers(newUrlInvokerMap);
             // state change
             // If the calculation is wrong, it is not processed.
             if (newUrlInvokerMap == null || newUrlInvokerMap.size() == 0) {
@@ -586,16 +576,18 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
         if (forbidden) {
             // 1. No service provider 2. Service providers are disabled
             throw new RpcException(RpcException.FORBIDDEN_EXCEPTION,
-                "No provider available from registry " + getUrl().getAddress() + " for service " + getConsumerUrl().getServiceKey() + " on consumer " +  NetUtils.getLocalHost()
-                        + " use dubbo version " + Version.getVersion() + ", please check status of providers(disabled, not registered or in blacklist).");
+                    "No provider available from registry " + getUrl().getAddress() + " for service " + getConsumerUrl().getServiceKey() + " on consumer " + NetUtils.getLocalHost()
+                            + " use dubbo version " + Version.getVersion() + ", please check status of providers(disabled, not registered or in blacklist).");
         }
         List<Invoker<T>> invokers = null;
         Map<String, List<Invoker<T>>> localMethodInvokerMap = this.methodInvokerMap; // local reference
         if (localMethodInvokerMap != null && localMethodInvokerMap.size() > 0) {
+            // invocation 应该是RpcInvocation，封装方法名、方法参数
             String methodName = RpcUtils.getMethodName(invocation);
             Object[] args = RpcUtils.getArguments(invocation);
             if (args != null && args.length > 0 && args[0] != null
                     && (args[0] instanceof String || args[0].getClass().isEnum())) {
+                // 根据方法名和第一个参数
                 invokers = localMethodInvokerMap.get(methodName + "." + args[0]); // The routing can be enumerated according to the first parameter
             }
             if (invokers == null) {
