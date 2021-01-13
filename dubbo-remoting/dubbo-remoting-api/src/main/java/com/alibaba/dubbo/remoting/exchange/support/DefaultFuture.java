@@ -140,14 +140,17 @@ public class DefaultFuture implements ResponseFuture {
     @Override
     public Object get(int timeout) throws RemotingException {
         if (timeout <= 0) {
+            // 默认是1000
             timeout = Constants.DEFAULT_TIMEOUT;
         }
         if (!isDone()) {
             long start = System.currentTimeMillis();
             lock.lock();
             try {
+                // 等待timeout时间，再判断是否已经返回结果
                 while (!isDone()) {
                     done.await(timeout, TimeUnit.MILLISECONDS);
+                    // 接收到结果 或者 超时 退出
                     if (isDone() || System.currentTimeMillis() - start > timeout) {
                         break;
                     }
@@ -158,6 +161,7 @@ public class DefaultFuture implements ResponseFuture {
                 lock.unlock();
             }
             if (!isDone()) {
+                // 未完成，抛超时异常
                 throw new TimeoutException(sent > 0, channel, getTimeoutMessage(false));
             }
         }
